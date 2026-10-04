@@ -47,6 +47,8 @@ export default function SalesPage({ tab }: { tab: Tab }) {
   const [agents, setAgents] = useState<any[]>([])
   const [showSaleForm, setShowSaleForm] = useState(false)
   const [showVisitForm, setShowVisitForm] = useState(false)
+  const [orderLines, setOrderLines] = useState<{ product_id: string; name: string; quantity: number }[]>([])
+  const [orderPick, setOrderPick] = useState({ product_id: '', quantity: '1' })
   const [showActivationForm, setShowActivationForm] = useState(false)
   const [showTargetForm, setShowTargetForm] = useState(false)
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null)
@@ -66,7 +68,7 @@ export default function SalesPage({ tab }: { tab: Tab }) {
       supabase.from('btl_targets').select('*, btl_products(name), btl_projects(name)').order('period_end', { ascending: false }),
       supabase.from('btl_products').select('id, name, category, project_id').eq('is_active', true).order('name'),
       supabase.from('btl_outlets').select('id, name, region, project_id').eq('is_active', true).order('name'),
-      supabase.from('btl_projects').select('id, name, client, type, outlet_mode, is_active').eq('is_active', true).order('name'),
+      supabase.from('btl_projects').select('id, name, client, type, outlet_mode, capture_orders, is_active').eq('is_active', true).order('name'),
     ])
     if (s.data) setSales(s.data as any)
     if (v.data) setVisits(v.data as any)
@@ -167,9 +169,15 @@ export default function SalesPage({ tab }: { tab: Tab }) {
     const typed = projects.find(p => p.id === visitForm.project_id)?.outlet_mode === 'agent'
     if (typed && !visitForm.outlet_name.trim()) { setError('Outlet name is required'); return }
     setError(null); setSaving(true)
-    const { error: err } = await supabase.from('btl_visits').insert({ agent_id: visitForm.agent_id, created_by: profile!.id, outlet_id: typed ? null : (visitForm.outlet_id || null), outlet_name: typed ? visitForm.outlet_name.trim() : null, project_id: visitForm.project_id || null, purpose: visitForm.purpose || null, outcome: visitForm.outcome || null, notes: visitForm.notes || null, visit_date: today })
-    setSaving(false); if (err) { setError(err.message); return }
-    setShowVisitForm(false); setVisitForm({ agent_id: '', outlet_id: '', outlet_name: '', project_id: '', purpose: '', outcome: '', notes: '' }); loadAll()
+    const { data: visit, error: err } = await supabase.from('btl_visits').insert({ agent_id: visitForm.agent_id, created_by: profile!.id, outlet_id: typed ? null : (visitForm.outlet_id || null), outlet_name: typed ? visitForm.outlet_name.trim() : null, project_id: visitForm.project_id || null, purpose: visitForm.purpose || null, outcome: visitForm.outcome || null, notes: visitForm.notes || null, visit_date: today }).select('id').single()
+    if (err || !visit) { setSaving(false); setError(err?.message || 'Could not save visit'); return }
+    const withOrders = projects.find(p => p.id === visitForm.project_id)?.capture_orders && orderLines.length > 0
+    if (withOrders) {
+      const { error: oErr } = await supabase.from('btl_sales').insert(orderLines.map(l => ({ agent_id: visitForm.agent_id, created_by: profile!.id, visit_id: visit.id, product_id: l.product_id, outlet_id: typed ? null : (visitForm.outlet_id || null), project_id: visitForm.project_id || null, quantity: l.quantity, sale_type: 'order', notes: typed ? `Order from visit to ${visitForm.outlet_name.trim()}` : 'Order from visit', sale_date: today })))
+      if (oErr) { setSaving(false); setError('Visit saved, but orders failed: ' + oErr.message); loadAll(); return }
+    }
+    setSaving(false)
+    setShowVisitForm(false); setVisitForm({ agent_id: '', outlet_id: '', outlet_name: '', project_id: '', purpose: '', outcome: '', notes: '' }); setOrderLines([]); setOrderPick({ product_id: '', quantity: '1' }); loadAll()
   }
 
   async function saveActivation() {
@@ -395,6 +403,17 @@ export default function SalesPage({ tab }: { tab: Tab }) {
                   <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Purpose</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={visitForm.purpose} onChange={e => setVisitForm(f => ({ ...f, purpose: e.target.value }))} /></div>
                   <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Outcome</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={visitForm.outcome} onChange={e => setVisitForm(f => ({ ...f, outcome: e.target.value }))} /></div>
                   <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Notes</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" rows={2} value={visitForm.notes} onChange={e => setVisitForm(f => ({ ...f, notes: e.target.value }))} /></div>
+                  {projects.find(p => p.id === visitForm.project_id)?.capture_orders && (
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Sales order (optional)</label>
+                      {orderLines.map((l, i) => <div key={i} className="flex items-center justify-between text-sm mb-1"><span>{l.quantity} × {l.name}</span><button type="button" className="text-xs text-red-500" onClick={() => setOrderLines(ls => ls.filter((_, j) => j !== i))}>Remove</button></div>)}
+                      <div className="flex gap-2">
+                        <select className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" value={orderPick.product_id} onChange={e => setOrderPick(x => ({ ...x, product_id: e.target.value }))}><option value="">Select product…</option>{products.filter(p => !p.project_id || p.project_id === visitForm.project_id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+                        <input type="number" min="1" className="w-20 border border-slate-200 rounded-lg px-3 py-2 text-sm" value={orderPick.quantity} onChange={e => setOrderPick(x => ({ ...x, quantity: e.target.value }))} />
+                        <button type="button" className="px-3 py-2 rounded-lg bg-lime-600 text-white text-sm" onClick={() => { const p = products.find(x => x.id === orderPick.product_id); const q = parseInt(orderPick.quantity) || 0; if (!p || q < 1) return; setOrderLines(ls => [...ls, { product_id: p.id, name: p.name, quantity: q }]); setOrderPick({ product_id: '', quantity: '1' }) }}>Add</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {error && <p className="text-red-600 text-sm mt-3">{error}</p>}
                 <button onClick={saveVisit} disabled={saving} className="mt-4 w-full bg-emerald-600 text-white rounded-lg py-2 text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50">{saving ? 'Saving…' : 'Submit Visit'}</button>

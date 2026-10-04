@@ -20,7 +20,7 @@ export default function SettingsPage() {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
   const [productForm, setProductForm] = useState({ name: '', category: '', project_id: '' })
   const [outletForm, setOutletForm] = useState({ name: '', region: '', project_id: '' })
-  const [projectForm, setProjectForm] = useState({ name: '', client: '', description: '', start_date: '', end_date: '', type: '', outlet_mode: 'admin' })
+  const [projectForm, setProjectForm] = useState({ name: '', client: '', description: '', start_date: '', end_date: '', type: '', outlet_mode: 'admin', capture_orders: false })
   const [showStaffForm, setShowStaffForm] = useState(false)
   const [showAgentForm, setShowAgentForm] = useState(false)
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null)
@@ -145,17 +145,18 @@ export default function SettingsPage() {
       end_date: projectForm.end_date || null,
       type: projectForm.type,
       outlet_mode: projectForm.type === 'visit' ? projectForm.outlet_mode : 'admin',
+      capture_orders: projectForm.type === 'visit' ? projectForm.capture_orders : false,
     }
     const { error: err } = editingProjectId
       ? await supabase.from('btl_projects').update(payload).eq('id', editingProjectId)
       : await supabase.from('btl_projects').insert({ ...payload, is_active: true })
     setSaving(false); if (err) { setError(err.message); return }
-    setShowProjectForm(false); setEditingProjectId(null); setProjectForm({ name: '', client: '', description: '', start_date: '', end_date: '', type: '', outlet_mode: 'admin' }); loadAll()
+    setShowProjectForm(false); setEditingProjectId(null); setProjectForm({ name: '', client: '', description: '', start_date: '', end_date: '', type: '', outlet_mode: 'admin', capture_orders: false }); loadAll()
   }
 
   function openEditProject(p: any) {
     setError(null); setEditingProjectId(p.id)
-    setProjectForm({ name: p.name || '', client: p.client || '', description: p.description || '', start_date: p.start_date || '', end_date: p.end_date || '', type: p.type || '', outlet_mode: p.outlet_mode || 'admin' })
+    setProjectForm({ name: p.name || '', client: p.client || '', description: p.description || '', start_date: p.start_date || '', end_date: p.end_date || '', type: p.type || '', outlet_mode: p.outlet_mode || 'admin', capture_orders: !!p.capture_orders })
     setShowProjectForm(true)
   }
 
@@ -393,7 +394,7 @@ export default function SettingsPage() {
                         <option value="visit">Outlet Visit</option>
                         <option value="event">Event</option>
                       </select>
-                      {p.type === 'visit' && <div className="text-xs text-slate-400 mt-1">{p.outlet_mode === 'agent' ? 'Agents type outlet name' : 'Admin-defined outlets'}</div>}
+                      {p.type === 'visit' && <div className="text-xs text-slate-400 mt-1">{p.outlet_mode === 'agent' ? 'Agents type outlet name' : 'Admin-defined outlets'}{p.capture_orders ? ' · Sales orders on' : ''}</div>}
                     </td>
                     <td className="px-4 py-3 text-slate-500">{p.client || '—'}</td>
                     <td className="px-4 py-3 text-slate-500">
@@ -427,6 +428,7 @@ export default function SettingsPage() {
                   <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Name *</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={projectForm.name} onChange={e => setProjectForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Guinness Activation Q4" /></div>
                   <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Type *</label><select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={projectForm.type} onChange={e => setProjectForm(f => ({ ...f, type: e.target.value }))}><option value="">Select type…</option><option value="sales">Sales Activation</option><option value="visit">Outlet Visit</option><option value="event">Event</option></select></div>
                   {projectForm.type === 'visit' && <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Outlets</label><select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={projectForm.outlet_mode} onChange={e => setProjectForm(f => ({ ...f, outlet_mode: e.target.value }))}><option value="admin">Defined by admin (agents pick from a list)</option><option value="agent">Agents type the outlet name</option></select></div>}
+                  {projectForm.type === 'visit' && <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={projectForm.capture_orders} onChange={e => setProjectForm(f => ({ ...f, capture_orders: e.target.checked }))} /> Visits can generate sales orders</label>}
                   <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Client</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={projectForm.client} onChange={e => setProjectForm(f => ({ ...f, client: e.target.value }))} placeholder="e.g. Guinness Ghana" /></div>
                   <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Description</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" rows={2} value={projectForm.description} onChange={e => setProjectForm(f => ({ ...f, description: e.target.value }))} /></div>
                   <div className="flex gap-3">
