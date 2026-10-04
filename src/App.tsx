@@ -41,6 +41,18 @@ function Shell() {
     )
   }
 
+  if (role === 'client' && !(profile as any)?.project_id) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+        <div className="max-w-sm text-center card">
+          <h1 className="text-lg font-bold text-slate-900 mb-2">No project assigned</h1>
+          <p className="text-slate-500 text-sm mb-4">Your account has not been linked to a project yet. Please contact your administrator.</p>
+          <button onClick={() => signOut()} className="btn-secondary w-full">Sign out</button>
+        </div>
+      </div>
+    )
+  }
+
   const effectiveTab = tab === 'settings' && !isManager ? 'overview' : tab
 
   return (

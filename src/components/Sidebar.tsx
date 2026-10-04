@@ -45,7 +45,7 @@ export default function Sidebar({ tab, onTabChange }: { tab: Tab; onTabChange: (
       <div className="px-3 py-4 border-t border-slate-800">
         <div className="px-3 mb-2">
           <p className="text-sm font-medium truncate">{profile?.full_name || profile?.email}</p>
-          <p className="text-xs text-slate-500 capitalize">{profile?.role || 'staff'}</p>
+          <p className="text-xs text-slate-500 capitalize">{profile?.role === 'client' ? 'Project viewer' : (profile?.role || 'staff')}</p>
         </div>
         <button
           onClick={() => signOut()}

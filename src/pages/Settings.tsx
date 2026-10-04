@@ -38,7 +38,7 @@ export default function SettingsPage() {
       supabase.from('btl_products').select('*').order('name'),
       supabase.from('btl_outlets').select('*').order('name'),
       supabase.from('btl_projects').select('*').order('created_at', { ascending: false }),
-      supabase.from('profiles').select('id, full_name, email, role, is_active').neq('role', 'agent').order('full_name'),
+      supabase.from('profiles').select('id, full_name, email, role, project_id, is_active').neq('role', 'agent').order('full_name'),
       supabase.from('profiles').select('id, full_name, email, phone, created_at, project_id, is_active').eq('role', 'agent').order('created_at', { ascending: false }),
       supabase.from('app_settings').select('value').eq('key', 'mobile_download_url').single(),
     ])
@@ -460,7 +460,16 @@ export default function SettingsPage() {
                         <option value="staff">Staff (view only)</option>
                         <option value="manager">Manager</option>
                         <option value="admin">Admin</option>
+                        <option value="client">Project viewer</option>
                       </select>
+                      {a.role === 'client' && (
+                        <div className="mt-2">
+                          <select className={`border rounded-lg px-2 py-1 text-sm w-full ${a.project_id ? 'border-slate-200' : 'border-amber-300 bg-amber-50'}`} value={a.project_id || ''} onChange={e => changeAgentProject(a.id, e.target.value)}>
+                            <option value="">Assign a project…</option>
+                            {projects.map((pr: any) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+                          </select>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${a.is_active !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{a.is_active !== false ? 'Active' : 'Deactivated'}</span>

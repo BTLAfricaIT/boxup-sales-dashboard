@@ -37,6 +37,7 @@ export default function SalesPage({ tab }: { tab: Tab }) {
   const { profile } = useAuth()
   const role = (profile as any)?.role ?? 'staff'
   const isManager = ['admin', 'manager'].includes(role)
+  const isClient = role === 'client'
   const [sales, setSales] = useState<any[]>([])
   const [visits, setVisits] = useState<any[]>([])
   const [activations, setActivations] = useState<any[]>([])
@@ -74,12 +75,17 @@ export default function SalesPage({ tab }: { tab: Tab }) {
     if (v.data) setVisits(v.data as any)
     if (a.data) setActivations(a.data as any)
     if (t.data) setTargets(t.data as any)
-    if (p.data) setProducts(p.data as any)
-    if (o.data) setOutlets(o.data as any)
-    if (pr.data) setProjects(pr.data as any)
+    const mine = (profile as any)?.project_id
+    if (p.data) setProducts((isClient ? (p.data as any[]).filter(x => !x.project_id || x.project_id === mine) : p.data) as any)
+    if (o.data) setOutlets((isClient ? (o.data as any[]).filter(x => !x.project_id || x.project_id === mine) : o.data) as any)
+    if (pr.data) setProjects((isClient ? (pr.data as any[]).filter(x => x.id === mine) : pr.data) as any)
   }
 
-  useEffect(() => { supabase.from('profiles').select('id, full_name, email, is_active').eq('role', 'agent').order('full_name').then(({ data }) => { if (data) setAgents(data as any) }) }, [])
+  useEffect(() => {
+    let q = supabase.from('profiles').select('id, full_name, email, is_active').eq('role', 'agent').order('full_name')
+    if (isClient) q = q.eq('project_id', (profile as any)?.project_id ?? '00000000-0000-0000-0000-000000000000')
+    q.then(({ data }) => { if (data) setAgents(data as any) })
+  }, [])
   useEffect(() => { loadAll() }, [tab])
 
   const activeAgents = agents.filter(a => a.is_active !== false)
