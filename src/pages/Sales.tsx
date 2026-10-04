@@ -51,7 +51,7 @@ export default function SalesPage({ tab }: { tab: Tab }) {
   const [showTargetForm, setShowTargetForm] = useState(false)
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null)
   const [saleForm, setSaleForm] = useState({ agent_id: '', product_id: '', outlet_id: '', project_id: '', quantity: '1', sale_type: 'activation', notes: '' })
-  const [visitForm, setVisitForm] = useState({ agent_id: '', outlet_id: '', project_id: '', purpose: '', outcome: '', notes: '' })
+  const [visitForm, setVisitForm] = useState({ agent_id: '', outlet_id: '', outlet_name: '', project_id: '', purpose: '', outcome: '', notes: '' })
   const [actForm, setActForm] = useState({ agent_id: '', event_name: '', location: '', region: '', product_id: '', project_id: '', participants: '0', units_distributed: '0', notes: '' })
   const [targetForm, setTargetForm] = useState({ user_id: '', product_id: '', project_id: '', target_type: 'sales', daily_target: '', target_qty: '10', period_start: '', period_end: '', notes: '' })
   const [saving, setSaving] = useState(false)
@@ -66,7 +66,7 @@ export default function SalesPage({ tab }: { tab: Tab }) {
       supabase.from('btl_targets').select('*, btl_products(name), btl_projects(name)').order('period_end', { ascending: false }),
       supabase.from('btl_products').select('id, name, category, project_id').eq('is_active', true).order('name'),
       supabase.from('btl_outlets').select('id, name, region, project_id').eq('is_active', true).order('name'),
-      supabase.from('btl_projects').select('id, name, client, type, is_active').eq('is_active', true).order('name'),
+      supabase.from('btl_projects').select('id, name, client, type, outlet_mode, is_active').eq('is_active', true).order('name'),
     ])
     if (s.data) setSales(s.data as any)
     if (v.data) setVisits(v.data as any)
@@ -164,10 +164,12 @@ export default function SalesPage({ tab }: { tab: Tab }) {
 
   async function saveVisit() {
     if (!visitForm.agent_id) { setError('Agent is required'); return }
+    const typed = projects.find(p => p.id === visitForm.project_id)?.outlet_mode === 'agent'
+    if (typed && !visitForm.outlet_name.trim()) { setError('Outlet name is required'); return }
     setError(null); setSaving(true)
-    const { error: err } = await supabase.from('btl_visits').insert({ agent_id: visitForm.agent_id, created_by: profile!.id, outlet_id: visitForm.outlet_id || null, project_id: visitForm.project_id || null, purpose: visitForm.purpose || null, outcome: visitForm.outcome || null, notes: visitForm.notes || null, visit_date: today })
+    const { error: err } = await supabase.from('btl_visits').insert({ agent_id: visitForm.agent_id, created_by: profile!.id, outlet_id: typed ? null : (visitForm.outlet_id || null), outlet_name: typed ? visitForm.outlet_name.trim() : null, project_id: visitForm.project_id || null, purpose: visitForm.purpose || null, outcome: visitForm.outcome || null, notes: visitForm.notes || null, visit_date: today })
     setSaving(false); if (err) { setError(err.message); return }
-    setShowVisitForm(false); setVisitForm({ agent_id: '', outlet_id: '', project_id: '', purpose: '', outcome: '', notes: '' }); loadAll()
+    setShowVisitForm(false); setVisitForm({ agent_id: '', outlet_id: '', outlet_name: '', project_id: '', purpose: '', outcome: '', notes: '' }); loadAll()
   }
 
   async function saveActivation() {
@@ -305,7 +307,7 @@ export default function SalesPage({ tab }: { tab: Tab }) {
             <h3 className="font-semibold text-slate-800 mb-4">Recent Activity</h3>
             <div className="space-y-2">{[
               ...sales.slice(0,5).map(s => ({ date: s.sale_date, type: 'Sale', detail: `${s.quantity}× ${s.btl_products?.name||'—'}`, agent: s.profiles?.full_name, color: 'bg-lime-100 text-lime-700' })),
-              ...visits.slice(0,3).map(v => ({ date: v.visit_date, type: 'Visit', detail: v.btl_outlets?.name||'—', agent: v.profiles?.full_name, color: 'bg-emerald-100 text-emerald-700' })),
+              ...visits.slice(0,3).map(v => ({ date: v.visit_date, type: 'Visit', detail: v.btl_outlets?.name||v.outlet_name||'—', agent: v.profiles?.full_name, color: 'bg-emerald-100 text-emerald-700' })),
               ...activations.slice(0,3).map(a => ({ date: a.activation_date, type: 'Promo', detail: a.event_name, agent: a.profiles?.full_name, color: 'bg-purple-100 text-purple-700' })),
             ].sort((a,b) => b.date?.localeCompare(a.date||'')||0).slice(0,12).map((item,i) => (
               <div key={i} className="flex items-center gap-3 text-sm py-1">
@@ -375,7 +377,7 @@ export default function SalesPage({ tab }: { tab: Tab }) {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-100"><tr>{['Date','Agent','Outlet','Project','Purpose','Outcome','Notes'].map(h => <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-slate-50">
-                {visits.map(v => <tr key={v.id} className="hover:bg-slate-50"><td className="px-4 py-3 text-slate-500">{v.visit_date}</td><td className="px-4 py-3 font-medium">{v.profiles?.full_name||'—'}</td><td className="px-4 py-3">{v.btl_outlets?.name||'—'}</td><td className="px-4 py-3 text-slate-500">{v.btl_projects?.name||'—'}</td><td className="px-4 py-3">{v.purpose||'—'}</td><td className="px-4 py-3">{v.outcome||'—'}</td><td className="px-4 py-3 text-slate-400">{v.notes||'—'}</td></tr>)}
+                {visits.map(v => <tr key={v.id} className="hover:bg-slate-50"><td className="px-4 py-3 text-slate-500">{v.visit_date}</td><td className="px-4 py-3 font-medium">{v.profiles?.full_name||'—'}</td><td className="px-4 py-3">{v.btl_outlets?.name||v.outlet_name||'—'}</td><td className="px-4 py-3 text-slate-500">{v.btl_projects?.name||'—'}</td><td className="px-4 py-3">{v.purpose||'—'}</td><td className="px-4 py-3">{v.outcome||'—'}</td><td className="px-4 py-3 text-slate-400">{v.notes||'—'}</td></tr>)}
                 {!visits.length && <tr><td colSpan={7} className="text-center text-slate-400 py-10">No visits yet.</td></tr>}
               </tbody>
             </table>
@@ -386,8 +388,10 @@ export default function SalesPage({ tab }: { tab: Tab }) {
                 <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-semibold">Log Retail Visit</h2><button onClick={() => setShowVisitForm(false)}><X size={20} className="text-slate-400" /></button></div>
                 <div className="space-y-3">
                   <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Agent *</label><select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={visitForm.agent_id} onChange={e => setVisitForm(f => ({ ...f, agent_id: e.target.value }))}><option value="">Select agent…</option>{activeAgents.map(a => <option key={a.id} value={a.id}>{a.full_name||a.email}</option>)}</select></div>
-                  <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Project</label><select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={visitForm.project_id} onChange={e => setVisitForm(f => ({ ...f, project_id: e.target.value, outlet_id: '' }))}><option value="">Select project…</option>{projects.filter(p => p.type === 'visit').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-                  <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Outlet</label><select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={visitForm.outlet_id} onChange={e => setVisitForm(f => ({ ...f, outlet_id: e.target.value }))}><option value="">Select outlet…</option>{outlets.filter(o => !visitForm.project_id || !o.project_id || o.project_id === visitForm.project_id).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
+                  <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Project</label><select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={visitForm.project_id} onChange={e => setVisitForm(f => ({ ...f, project_id: e.target.value, outlet_id: '', outlet_name: '' }))}><option value="">Select project…</option>{projects.filter(p => p.type === 'visit').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+                  {projects.find(p => p.id === visitForm.project_id)?.outlet_mode === 'agent'
+                    ? <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Outlet name *</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={visitForm.outlet_name} onChange={e => setVisitForm(f => ({ ...f, outlet_name: e.target.value }))} placeholder="Type the outlet visited" /></div>
+                    : <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Outlet</label><select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={visitForm.outlet_id} onChange={e => setVisitForm(f => ({ ...f, outlet_id: e.target.value }))}><option value="">Select outlet…</option>{outlets.filter(o => !visitForm.project_id || !o.project_id || o.project_id === visitForm.project_id).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>}
                   <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Purpose</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={visitForm.purpose} onChange={e => setVisitForm(f => ({ ...f, purpose: e.target.value }))} /></div>
                   <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Outcome</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={visitForm.outcome} onChange={e => setVisitForm(f => ({ ...f, outcome: e.target.value }))} /></div>
                   <div><label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">Notes</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" rows={2} value={visitForm.notes} onChange={e => setVisitForm(f => ({ ...f, notes: e.target.value }))} /></div>
